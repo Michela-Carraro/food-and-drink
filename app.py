@@ -220,3 +220,22 @@ with col_output:
         elif current_data["Food Waste (%)"] > 15.0:
             st.warning("🪰 **Unsustainable Product Disposal:** Food waste is cutting deep into your margins. In the F&B sector, excessive batch sizes combined with low transport frequencies kill your speed-to-market loop.")
         else:
+st.success("💎 Optimal Operational Flow Balanced: Excellent trade-off execution. Your system safely preserved the biological matrix, minimized trash, and successfully defended the retail shelf space.")
+# --- MULTI-ROUND LEDGER HISTORY TABLE ---
+st.divider()
+st.subheader("📜 Historical Performance Over Time")
+history_df = pd.DataFrame(st.session_state.history)[["Round", "Net Profit (€)", "Food Waste (%)", "RSL (%)", "OOS (%)", "CO2 Emitted (kg)"]]
+st.dataframe(history_df, use_container_width=True, hide_index=True)
+# Round advancement control workflow block
+if st.session_state.round_number < 4:
+if st.button(f"➡️ Proceed to Round {st.session_state.round_number + 1}"):
+st.session_state.round_number += 1
+st.session_state.submitted = False
+st.rerun()
+else:
+st.success("🏆 Simulation Complete! Call your professor over to analyze your multi-round historical ledger performance trends.")
+if st.button("🔄 Reset Simulation"):
+st.session_state.round_number = 1
+st.session_state.history = []
+st.session_state.submitted = False
+st.rerun()
