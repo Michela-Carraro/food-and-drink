@@ -22,14 +22,14 @@ st.title("🍊 Food and Drink Retailing and Logistics Simulation")
 st.subheader("Master's Programme in Food and Drink Retailing and Logistics")
 
 st.markdown("""
-Welcome to **The Fresh Connection Lite**, an interactive logistics optimization game for **JuiceCo**,
+Welcome to the **Food and Drink Retailing and Logistics Simulation**, an interactive logistics optimization game for **JuiceCo**,
 a premium fresh orange juice manufacturing company.
 
 ### 🎮 How to Play:
 1. Formulate your logistics strategy using the sliders on the left.
 2. Click **'Validate & Run Simulation Round'** to locks in your choices. 
 3. The results will process dynamically for that period and lock into your **Corporate History Ledger**.
-4. You can progress up to **4 Operational Rounds** to correct your strategy based on teacher feedback.
+4. You can progress up to **4 Operational Rounds** to correct your strategy based on the analysis of your results.
 """)
 
 st.divider()
@@ -187,7 +187,7 @@ with col_output:
         kpi1, kpi2, kpi3, kpi4 = st.columns(4)
         kpi1.metric(
             label="Net Profit",
-            value=f"€ {current_data['Net Profit (€)']:,.2f}",
+            value=f"-€{abs(current_data['Net Profit (€)']):,.2f}" if current_data['Net Profit (€)'] < 0 else f"€{current_data['Net Profit (€)']:,.2f}",
             delta=f"Unit margin: € {((current_data['Net Profit (€)'] / current_data['Units Sold']) if current_data['Units Sold'] > 0 else 0):.2f}"
         )
         kpi2.metric(label="Food Waste", value=f"{current_data['Food Waste (%)']}%")
