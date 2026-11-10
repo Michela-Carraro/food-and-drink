@@ -1,202 +1,357 @@
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 
-# Configurazione della pagina
+# Page configuration
 st.set_page_config(
-    page_title="The Fresh Connection Lite - Simulation",
+    page_title="Food and Drink Retailing and Logistics Simulation",
     page_icon="🍊",
     layout="wide"
 )
 
-# Titolo principale e descrizione del corso
-st.title("🍊 The Fresh Connection Lite")
-st.subheader("Master in Food and Drink Retailing and Logistics - Simulazione di Supply Chain")
+# Main title and course description
+st.title("🍊 Food and Drink Retailing and Logistics Simulation")
+st.subheader("Master's Programme in Food and Drink Retailing and Logistics")
+
 st.markdown("""
-Benvenuti nella simulazione interattiva di ottimizzazione logistica per **JuiceCo**, azienda produttrice di succhi d'arancia freschi premium.
-Il vostro obiettivo come Team di Direzione Logistica è massimizzare il **Profitto Netto** e minimizzare lo **Spreco Alimentare**, 
-trovando il perfetto bilanciamento tra costi di trasporto, vincoli biologici della catena del freddo e penali contrattuali della GDO.
+Welcome to the interactive logistics optimization simulation for **JuiceCo**,
+a premium fresh orange juice manufacturing company.
+
+Your objective as the Logistics Management Team is to maximize **Net Profit**
+while minimizing **Food Waste**, finding the optimal balance between
+transportation costs, biological cold chain constraints, and contractual
+penalties imposed by large-scale retailers.
 """)
 
 st.divider()
 
-# Struttura a colonne: Sinistra per gli Input (Decisioni), Destra per gli Output (Risultati)
+# Input and output columns
 col_input, col_output = st.columns([1, 2])
 
 with col_input:
-    st.header("🛠️ Decisioni Strategiche")
-    st.markdown("Modificate i parametri logistici per il prossimo round operativo:")
-    
-    # 1. Dimensione del lotto
+    st.header("🛠️ Strategic Decisions")
+    st.markdown("Adjust the logistics parameters for the next operational round:")
+
+    # 1. Shipment batch size
     batch_size = st.slider(
-        "Dimensione del Lotto di Spedizione (Bottiglie)",
+        "Shipment Batch Size (Bottles)",
         min_value=500,
         max_value=10000,
         value=2000,
         step=500,
-        help="Lotti grandi riducono il costo unitario di trasporto ma aumentano i tempi di sosta in magazzino."
+        help="Larger batches reduce transportation costs per unit but increase warehouse dwell time."
     )
-    
-    # 2. Frequenza di consegna
+
+    # 2. Delivery frequency
     frequency_options = {
-        "Giornaliera": 1,
-        "Bisettimanale (2 volte a settimana)": 3,
-        "Settimanale": 7
+        "Daily": 1,
+        "Twice a Week": 3,
+        "Weekly": 7
     }
+
     frequency_label = st.selectbox(
-        "Frequenza di Consegna al Ce.Di. della GDO",
+        "Delivery Frequency to the Retail Distribution Centre (DC)",
         options=list(frequency_options.keys()),
         index=1,
-        help="Consegne frequenti garantiscono freschezza ma aumentano drasticamente i costi fissi di viaggio."
+        help="Frequent deliveries ensure product freshness but significantly increase fixed transportation costs."
     )
+
     days_between_deliveries = frequency_options[frequency_label]
-    
-    # 3. Qualità della Catena del Freddo
+
+    # 3. Cold chain quality
     cold_chain_level = st.radio(
-        "Investimento nella Catena del Freddo (IoT & Mezzi)",
-        options=["Standard (Basso Investimento)", "Premium (Alto Investimento - Sensori e Refrigerazione Costante)"],
+        "Cold Chain Investment (IoT & Refrigerated Vehicles)",
+        options=[
+            "Standard (Low Investment)",
+            "Premium (High Investment - Sensors and Continuous Refrigeration)"
+        ],
         index=0,
-        help="Il livello Premium protegge l'orologio biologico del succo, riducendo la velocità di degradazione qualitativa durante il transito."
+        help="The Premium option protects the juice's biological shelf life, reducing quality degradation during transportation."
     )
-    
-    # 4. Scorta di Sicurezza
+
+    # 4. Safety stock
     safety_stock_days = st.slider(
-        "Scorta di Sicurezza in Magazzino (Giorni di Copertura)",
+        "Warehouse Safety Stock (Days of Coverage)",
         min_value=1,
         max_value=10,
         value=3,
         step=1,
-        help="Più giorni di scorta proteggono dagli stockout dovuti alla variabilità della domanda, ma aumentano il rischio di scadenza del prodotto."
+        help="Higher safety stock protects against stockouts caused by demand variability, but increases the risk of product expiry."
     )
 
-# --- MOTORE MATEMATICO DELLA SIMULAZIONE (Logiche di Backend) ---
 
-# Parametri fissi di mercato
-DOMANDA_POTENZIALE_SETTIMANALE = 10000
-PREZZO_VENDITA_SCAFFALE = 5.00
-PREZZO_CESSIONE_INGROSSO = 3.50
-COSTO_PRODUZIONE_UNITARIO = 2.00
-SHELF_LIFE_TOTALE_GIORNI = 24
-SOGLIA_CONTRATTUALE_RSL = 70.0 # Carrefour rifiuta sotto il 70%
+# --- SIMULATION ENGINE (BACKEND LOGIC) ---
 
-# Calcolo Giorni in Transito e Degradazione
-giorni_transito_base = 2 if days_between_deliveries == 1 else (4 if days_between_deliveries == 3 else 7)
+# Fixed market parameters
+WEEKLY_POTENTIAL_DEMAND = 10000
+RETAIL_SELLING_PRICE = 5.00
+WHOLESALE_SELLING_PRICE = 3.50
+UNIT_PRODUCTION_COST = 2.00
+TOTAL_SHELF_LIFE_DAYS = 24
+CONTRACTUAL_RSL_THRESHOLD = 70.0  # Carrefour rejects products below 70%
+
+# Transit time and degradation calculation
+base_transit_days = (
+    2 if days_between_deliveries == 1
+    else (4 if days_between_deliveries == 3 else 7)
+)
+
 if batch_size > 5000:
-    giorni_transito_base += 1 # Rallentamenti per consolidamento lotti pesanti
+    base_transit_days += 1  # Delays caused by consolidating larger batches
 
-# Impatto Catena del Freddo sulla degradazione accelerata
-moltiplicatore_degrado = 1.0 if cold_chain_level.startswith("Premium") else 1.3
-giorni_vita_persi_in_transito = giorni_transito_base * moltiplicatore_degrado
+# Cold chain impact on accelerated degradation
+degradation_multiplier = (
+    1.0 if cold_chain_level.startswith("Premium") else 1.3
+)
 
-# Calcolo Shelf-Life Residua Reale (RSL %) all'arrivo
-giorni_residui_all_arrivo = SHELF_LIFE_TOTALE_GIORNI - giorni_vita_persi_in_transito - safety_stock_days
-rsl_percentuale = (giorni_residui_all_arrivo / SHELF_LIFE_TOTALE_GIORNI) * 100
-rsl_percentuale = max(0.0, min(100.0, rsl_percentuale))
+shelf_life_lost_in_transit = base_transit_days * degradation_multiplier
 
-# Calcolo Rifiuti e Spreco Alimentare (Food Waste %)
-saturazione_scaffale_rischio = (batch_size / 2000) * (days_between_deliveries / 2)
-food_waste_percent = 2.0 + (safety_stock_days * 3.5) + (saturazione_scaffale_rischio * 1.5)
-if rsl_percentuale < SOGLIA_CONTRATTUALE_RSL:
-    food_waste_percent += 40.0 # Penalità massiccia se la merce arriva al limite della soglia GDO
+# Remaining Shelf Life (RSL) upon arrival
+remaining_shelf_life_days = (
+    TOTAL_SHELF_LIFE_DAYS
+    - shelf_life_lost_in_transit
+    - safety_stock_days
+)
+
+rsl_percentage = (
+    remaining_shelf_life_days / TOTAL_SHELF_LIFE_DAYS
+) * 100
+
+rsl_percentage = max(0.0, min(100.0, rsl_percentage))
+
+# Food Waste calculation
+shelf_saturation_risk = (
+    batch_size / 2000
+) * (
+    days_between_deliveries / 2
+)
+
+food_waste_percent = (
+    2.0
+    + (safety_stock_days * 3.5)
+    + (shelf_saturation_risk * 1.5)
+)
+
+if rsl_percentage < CONTRACTUAL_RSL_THRESHOLD:
+    food_waste_percent += 40.0  # Major penalty if products arrive below retailer requirements
+
 food_waste_percent = max(0.0, min(100.0, food_waste_percent))
 
-# Calcolo Out-of-Stock (OOS %)
-oos_percent = 15.0 - (safety_stock_days * 3.0) + (days_between_deliveries * 2.0)
+# Out-of-Stock (OOS) calculation
+oos_percent = (
+    15.0
+    - (safety_stock_days * 3.0)
+    + (days_between_deliveries * 2.0)
+)
+
 if batch_size < 1000 and days_between_deliveries > 3:
-    oos_percent += 25.0 # Sotto-scorta critico
+    oos_percent += 25.0  # Critical understocking
+
 oos_percent = max(0.0, min(100.0, oos_percent))
 
-# --- BILANCIO FINANZIARIO ECONOMICO ---
-unita_richieste = DOMANDA_POTENZIALE_SETTIMANALE
-unita_perse_oos = unita_richieste * (oos_percent / 100)
-unita_consegnate_potenziali = unita_richieste - unita_perse_oos
 
-unita_scadute_waste = unita_consegnate_potenziali * (food_waste_percent / 100)
-unita_vendute_sane = unita_consegnate_potenziali - unita_scadute_waste
+# --- FINANCIAL PERFORMANCE ---
 
-# Voci di Costo
-costo_produzione_totale = unita_consegnate_potenziali * COSTO_PRODUZIONE_UNITARIO
+requested_units = WEEKLY_POTENTIAL_DEMAND
 
-# Costi di trasporto influenzati dalle decisioni
-costo_viaggio_base = 300 if days_between_deliveries == 1 else (600 if days_between_deliveries == 3 else 1200)
+units_lost_to_oos = requested_units * (oos_percent / 100)
+
+potentially_delivered_units = requested_units - units_lost_to_oos
+
+expired_wasted_units = (
+    potentially_delivered_units * (food_waste_percent / 100)
+)
+
+healthy_units_sold = potentially_delivered_units - expired_wasted_units
+
+# Cost items
+total_production_cost = (
+    potentially_delivered_units * UNIT_PRODUCTION_COST
+)
+
+# Transportation costs influenced by strategic decisions
+base_trip_cost = (
+    300 if days_between_deliveries == 1
+    else (600 if days_between_deliveries == 3 else 1200)
+)
+
 if cold_chain_level.startswith("Premium"):
-    costo_viaggio_base *= 1.4 # Sovrapprezzo per mezzi refrigerati avanzati ed energia
-numero_viaggi_settimana = 7 / days_between_deliveries
-costo_trasporto_totale = costo_viaggio_base * numero_viaggi_settimana
+    base_trip_cost *= 1.4  # Additional cost for advanced refrigerated vehicles and energy
 
-costo_stoccaggio_scorte = safety_stock_days * 250
-costo_penali_contract = unita_scadute_waste * PREZZO_CESSIONE_INGROSSO # Rimborso al retailer per merce buttata
+weekly_number_of_trips = 7 / days_between_deliveries
 
-# Ricavi e Profitto Netto
-ricavi_totali = unita_vendute_sane * PREZZO_CESSIONE_INGROSSO
-profitto_netto = ricavi_totali - costo_produzione_totale - costo_trasporto_totale - costo_stoccaggio_scorte - costo_penali_contract
+total_transportation_cost = (
+    base_trip_cost * weekly_number_of_trips
+)
 
-# Calcolo Carbon Footprint (CO2) indicativo
-co2_trasporto = (numero_viaggi_settimana * 120) / (batch_size / 2000)
-co2_refrigerazione = 450 if cold_chain_level.startswith("Premium") else 200
-co2_totale_kg = co2_trasporto + co2_refrigerazione + (unita_scadute_waste * 0.1)
+inventory_holding_cost = safety_stock_days * 250
 
-# --- VISUALIZZAZIONE RISULTATI (Dashboard) ---
+contractual_penalties = (
+    expired_wasted_units * WHOLESALE_SELLING_PRICE
+)
+
+# Revenue and net profit
+total_revenue = healthy_units_sold * WHOLESALE_SELLING_PRICE
+
+net_profit = (
+    total_revenue
+    - total_production_cost
+    - total_transportation_cost
+    - inventory_holding_cost
+    - contractual_penalties
+)
+
+# Indicative carbon footprint calculation
+transportation_co2 = (
+    weekly_number_of_trips * 120
+) / (batch_size / 2000)
+
+refrigeration_co2 = (
+    450 if cold_chain_level.startswith("Premium") else 200
+)
+
+total_co2_kg = (
+    transportation_co2
+    + refrigeration_co2
+    + (expired_wasted_units * 0.1)
+)
+
+
+# --- RESULTS DASHBOARD ---
+
 with col_output:
-    st.header("📊 Performance Dashboard (Risultati Settimanali)")
-    
-    # Riga dei KPI principali
+    st.header("📊 Performance Dashboard (Weekly Results)")
+
+    # Main KPIs
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+
     kpi1.metric(
-        label="Profitto Netto", 
-        value=f"€ {profitto_netto:,.2f}",
-        delta=f"Margine unitario reale: € {((profitto_netto/unita_vendute_sane) if unita_vendute_sane > 0 else 0):.2f}",
-        delta_color="normal" if profitto_netto > 0 else "inverse"
+        label="Net Profit",
+        value=f"€ {net_profit:,.2f}",
+        delta=(
+            f"Actual unit margin: € "
+            f"{((net_profit / healthy_units_sold) if healthy_units_sold > 0 else 0):.2f}"
+        ),
+        delta_color="normal" if net_profit > 0 else "inverse"
     )
+
     kpi2.metric(
-        label="Spreco Alimentare (Food Waste)", 
-        value=f"{food_waste_percent:.1f} %",
-        delta="CRITICO" if food_waste_percent > 20 else "Accettabile",
+        label="Food Waste",
+        value=f"{food_waste_percent:.1f}%",
+        delta="CRITICAL" if food_waste_percent > 20 else "Acceptable",
         delta_color="inverse" if food_waste_percent > 20 else "normal"
     )
+
     kpi3.metric(
-        label="Shelf-Life Residua (RSL)", 
-        value=f"{rsl_percentuale:.1f} %",
-        delta="Rifiuto GDO (<70%)" if rsl_percentuale < SOGLIA_CONTRATTUALE_RSL else "Conforme",
-        delta_color="normal" if rsl_percentuale >= SOGLIA_CONTRATTUALE_RSL else "inverse"
+        label="Remaining Shelf Life (RSL)",
+        value=f"{rsl_percentage:.1f}%",
+        delta=(
+            "Retailer Rejection (<70%)"
+            if rsl_percentage < CONTRACTUAL_RSL_THRESHOLD
+            else "Compliant"
+        ),
+        delta_color=(
+            "normal"
+            if rsl_percentage >= CONTRACTUAL_RSL_THRESHOLD
+            else "inverse"
+        )
     )
+
     kpi4.metric(
-        label="Fuori Stock (OOS)", 
-        value=f"{oos_percent:.1f} %",
-        delta="Scaffale vuoto" if oos_percent > 10 else "Ottimale",
+        label="Out-of-Stock (OOS)",
+        value=f"{oos_percent:.1f}%",
+        delta="Empty Shelves" if oos_percent > 10 else "Optimal",
         delta_color="inverse" if oos_percent > 10 else "normal"
     )
-    
+
     st.divider()
-    
-    # Grafici dei costi e analisi dei trade-off
-    st.subheader("📉 Struttura dei Costi e Sostenibilità")
-    
+
+    # Cost charts and trade-off analysis
+    st.subheader("📉 Cost Structure and Sustainability")
+
     col_chart1, col_chart2 = st.columns(2)
-    
+
     with col_chart1:
-        st.markdown("**Analisi dei Costi Operativi Sostenuti (€)**")
-        costi_data = {
-            "Voce di Costo": ["Produzione Base", "Trasporto Refrigerato", "Mantenimento Scorte", "Penali Merce Scaduta / Rifiutata"],
-            "Valore (€)": [float(costo_produzione_totale), float(costo_trasporto_totale), float(costo_stoccaggio_scorte), float(costo_penali_contract)]
+        st.markdown("**Operating Cost Breakdown (€)**")
+
+        cost_data = {
+            "Cost Category": [
+                "Production",
+                "Refrigerated Transportation",
+                "Inventory Holding",
+                "Expired / Rejected Goods Penalties"
+            ],
+            "Value (€)": [
+                float(total_production_cost),
+                float(total_transportation_cost),
+                float(inventory_holding_cost),
+                float(contractual_penalties)
+            ]
         }
-        df_costi = pd.DataFrame(costi_data)
-        st.bar_chart(data=df_costi, x="Voce di Costo", y="Valore (€)", use_container_width=True)
-        
+
+        df_costs = pd.DataFrame(cost_data)
+
+        st.bar_chart(
+            data=df_costs,
+            x="Cost Category",
+            y="Value (€)",
+            use_container_width=True
+        )
+
     with col_chart2:
-        st.markdown("**Impronta Ecologica della Strategia**")
-        st.metric(label="Emissioni Totali di CO₂ equivalenti", value=f"{co2_totale_kg:.1f} kg CO₂e")
-        st.progress(min(1.0, max(0.0, co2_totale_kg / 3000.0)), text="Saturazione capacità ecologica di filiera")
-        
+        st.markdown("**Environmental Impact of the Strategy**")
+
+        st.metric(
+            label="Total CO₂ Equivalent Emissions",
+            value=f"{total_co2_kg:.1f} kg CO₂e"
+        )
+
+        st.progress(
+            min(1.0, max(0.0, total_co2_kg / 3000.0)),
+            text="Supply Chain Environmental Capacity Utilization"
+        )
+
     st.divider()
-    
-    # Note di Analisi e Feedback del Docente Automatico
-    st.subheader("🧠 Report di Consulenza Logistica (Feedback per gli studenti)")
-    if rsl_percentuale < SOGLIA_CONTRATTUALE_RSL:
-        st.error(f"🚨 **Rifiuto del Carico al Ce.Di.:** La vostra Shelf-Life Residua ({rsl_percentuale:.1f}%) è scesa sotto la soglia contrattuale del {SOGLIA_CONTRATTUALE_RSL}%. La GDO ha respinto la merce applicando le penali. Dovete ridurre i giorni di sosta delle scorte o investire nella Catena del Freddo Premium per rallentare il degrado biologico!")
+
+    # Automatic instructor feedback
+    st.subheader("🧠 Logistics Consulting Report (Student Feedback)")
+
+    if rsl_percentage < CONTRACTUAL_RSL_THRESHOLD:
+
+        st.error(
+            f"🚨 **Distribution Centre Load Rejection:** "
+            f"Your Remaining Shelf Life (RSL) has fallen to "
+            f"{rsl_percentage:.1f}%, below the contractual threshold of "
+            f"{CONTRACTUAL_RSL_THRESHOLD}%. "
+            f"The retailer has rejected the shipment and applied contractual penalties. "
+            f"You should reduce inventory holding time or invest in a Premium Cold Chain "
+            f"solution to slow down biological degradation!"
+        )
+
     elif oos_percent > 12.0:
-        st.warning(f"⚠️ **Scaffali Vuoti nei Punti Vendita:** Avete un tasso di Out-of-Stock molto elevato ({oos_percent:.1f}%). State perdendo quote di mercato e profitti preziosi perché la scorta di sicurezza è troppo bassa o le consegne sono troppo infrequenti per rispondere alla domanda.")
+
+        st.warning(
+            f"⚠️ **Empty Shelves at Retail Stores:** "
+            f"You have a very high Out-of-Stock rate ({oos_percent:.1f}%). "
+            f"You are losing market share and valuable profits because safety stock "
+            f"is too low or deliveries are too infrequent to meet customer demand."
+        )
+
     elif food_waste_percent > 15.0:
-        st.warning(f"🪰 **Eccesso di Spreco Alimentare:** State buttando via troppi succhi d'arancia a causa di lotti di spedizione eccessivi o troppi giorni di immobilizzazione delle merci. Ricordate che nel Food, lo stock che non gira scade e distrugge il margine netti.")
+
+        st.warning(
+            f"🪰 **Excessive Food Waste:** "
+            f"You are discarding too much orange juice due to oversized shipment batches "
+            f"or excessive inventory holding time. Remember: in the food industry, "
+            f"inventory that does not move eventually expires and destroys profit margins."
+        )
+
     else:
-        st.success("💎 **Ottimo Bilanciamento Operativo!** Siete riusciti a mantenere la conformità contrattuale con la GDO, contenere lo spreco e proteggere lo scaffale dai fuori stock. Siete pronti per presentare questa configurazione!")
+
+        st.success(
+            "💎 **Excellent Operational Balance!** "
+            "You have successfully maintained contractual compliance with the retailer, "
+            "controlled food waste, and protected retail shelves against stockouts. "
+            "You are ready to present your logistics strategy!"
+        )
